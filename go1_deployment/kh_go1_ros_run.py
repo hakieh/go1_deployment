@@ -126,7 +126,7 @@ def standup_procedure(env, ros_rate, angle_tolerance= 0.1,
         dof_pos = [env.low_state_buffer.motorState[env.dof_map[i]].q for i in range(12)]
         diff = [env.default_dof_pos[i].item() - dof_pos[i] for i in range(12)]
         direction = [1 if i > 0 else -1 for i in diff]
-       # print("diff",diff,end="\r")
+        # print("diff",diff,end="\r")
         if standup_timestep_i < warmup_timesteps:
             direction = [standup_timestep_i / warmup_timesteps * i for i in direction]
         if all([abs(i) < angle_tolerance for i in diff]):
@@ -134,7 +134,7 @@ def standup_procedure(env, ros_rate, angle_tolerance= 0.1,
         print("max joint error (rad):", max([abs(i) for i in diff]), end= "\r")
         for i in range(12):
             target_pos[0, i] = dof_pos[i] + direction[i] * angle_tolerance if abs(diff[i]) > angle_tolerance else env.default_dof_pos[i]
-       # print(target_pos)
+        # print(target_pos)
         env.publish_legs_cmd(target_pos,
             kp= kp,
             kd= kd,

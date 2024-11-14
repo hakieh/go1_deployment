@@ -100,7 +100,7 @@ class CommandsCfg:
         heading_control_stiffness=0.5,
         debug_vis=True,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.0, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
+            lin_vel_x=(-1.0, 1.0), lin_vel_y=(-0, 0), ang_vel_z=(0.0, 0.0), heading=(-math.pi, math.pi)
         ),
     )
 
@@ -224,7 +224,7 @@ class RewardsCfg:
 
     # -- task
     track_lin_vel_xy_exp = RewTerm(
-        func=mdp.track_lin_vel_xy_exp, weight=1.0, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
+        func=mdp.track_lin_vel_xy_exp, weight=1.5, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
     )
     track_ang_vel_z_exp = RewTerm(
         func=mdp.track_ang_vel_z_exp, weight=0.5, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
@@ -235,6 +235,8 @@ class RewardsCfg:
     dof_torques_l2 = RewTerm(func=mdp.joint_torques_l2, weight=-1.0e-5)
     dof_acc_l2 = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
     action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
+
+
     feet_air_time = RewTerm(
         func=mdp.feet_air_time,
         weight=0.125,
@@ -252,7 +254,7 @@ class RewardsCfg:
     # -- optional penalties
     flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=0.1)
     dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=0.0)
-    base_height = RewTerm(func=mdp.base_height_l2,weight=-1.0,params={"target_height":3.5})
+    base_height = RewTerm(func=mdp.base_height_l2,weight=-0.5,params={"target_height":2.7})
 
 @configclass
 class TerminationsCfg:
