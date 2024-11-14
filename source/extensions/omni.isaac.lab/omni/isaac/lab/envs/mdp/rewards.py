@@ -107,8 +107,10 @@ def base_height_l2(
     """
     # extract the used quantities (to enable type-hinting)
     asset: RigidObject = env.scene[asset_cfg.name]
+    time_mask = env.episode_length_buf>100
+    # print(env.episode_length_buf[0])
     # TODO: Fix this for rough-terrain.
-    return torch.square(asset.data.root_pos_w[:, 2] - target_height)
+    return torch.square(asset.data.root_pos_w[:, 2] - target_height)*time_mask
 
 
 def body_lin_acc_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
