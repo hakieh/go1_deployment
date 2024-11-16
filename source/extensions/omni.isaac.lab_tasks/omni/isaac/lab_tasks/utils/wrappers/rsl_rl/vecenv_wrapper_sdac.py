@@ -181,7 +181,7 @@ class SDACVecEnvWrapper(VecEnv):
     def step(self, actions: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         # record step information
         actions = torch.clip(actions,-5,5)
-        obs_dict, rew, terminated, truncated, extras = self.env.step(actions)
+        obs_dict, rew, terminated, truncated, extras = self.env.step(self.to_foat(actions))
         # compute dones for compatibility with RSL-RL
         dones = (terminated | truncated).to(dtype=torch.long)
         # move extra observations to the extras dict
@@ -197,3 +197,8 @@ class SDACVecEnvWrapper(VecEnv):
 
     def close(self):  # noqa: D102
         return self.env.close()
+    
+    def to_foat(self,actions):
+        res = actions/(self.action_atoms-1)*6-3
+        return res
+
