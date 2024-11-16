@@ -8,3 +8,4 @@
 from .exporter import export_policy_as_jit, export_policy_as_onnx
 from .rl_cfg import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
 from .vecenv_wrapper import RslRlVecEnvWrapper
+from .vecenv_wrapper_sdac import SDACVecEnvWrapper
