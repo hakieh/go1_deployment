@@ -248,11 +248,11 @@ class RewardsCfg:
     )
     undesired_contacts = RewTerm(
         func=mdp.undesired_contacts,
-        weight=-1.0,
+        weight=-3.0,
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*THIGH"), "threshold": 1.0},
     )
     # -- optional penalties
-    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=0.1)
+    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-1)
     dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=0.0)
     base_height = RewTerm(func=mdp.base_height_l2,weight=-0.5, params={"target_height": 3.5})
 
@@ -264,6 +264,10 @@ class TerminationsCfg:
     base_contact = DoneTerm(
         func=mdp.illegal_contact,
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names="base"), "threshold": 1.0},
+    )
+    roll_pitch = DoneTerm(
+        func=mdp.roll_pitch,
+        params={"robot_cfg": SceneEntityCfg("robot")},
     )
 
 

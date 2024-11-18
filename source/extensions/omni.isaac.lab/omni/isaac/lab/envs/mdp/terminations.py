@@ -71,6 +71,50 @@ def root_height_below_minimum(
     asset: RigidObject = env.scene[asset_cfg.name]
     return asset.data.root_pos_w[:, 2] < minimum_height
 
+def euler_from_quaternion(quat_angle):
+        """
+        Convert a quaternion into euler angles (roll, pitch, yaw)
+        roll is rotation around x in radians (counterclockwise)
+        pitch is rotation around y in radians (counterclockwise)
+        yaw is rotation around z in radians (counterclockwise)
+        """
+        x = quat_angle[:,1]; y = quat_angle[:,2]; z = quat_angle[:,3]; w = quat_angle[:,0]
+        t0 = +2.0 * (w * x + y * z)
+        t1 = +1.0 - 2.0 * (x * x + y * y)
+        roll_x = torch.atan2(t0, t1)
+     
+        t2 = +2.0 * (w * y - z * x)
+        t2 = torch.clip(t2, -1, 1)
+        pitch_y = torch.asin(t2)
+     
+        t3 = +2.0 * (w * z + x * y)
+        t4 = +1.0 - 2.0 * (y * y + z * z)
+        yaw_z = torch.atan2(t3, t4)
+     
+        return roll_x, pitch_y, yaw_z # in radians
+
+
+def roll_pitch(env: ManagerBasedRLEnv, robot_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Terminate when the contact force on the sensor exceeds the force threshold."""
+    # extract the used quantities (to enable type-hinting)
+    asset: Articulation = env.scene[robot_cfg.name]
+    quat = asset.data.root_quat_w
+
+    # quat_xyzw = torch.zeros_like(quat)
+    # quat_xyzw[:, 3] = quat[:, 0]
+    # quat_xyzw[:,0:3] = quat[:, 1:4]
+    # r = R.from_quat(quat_xyzw.cpu())
+    # print(r.as_euler('xyz', degrees=True))
+    # rot = r.as_euler('xyz')
+    roll, pitch, yaw = euler_from_quaternion(quat)
+    # roll = asset.data.root_ang_vel_w[:,0]
+    # pitch = asset.data.root_ang_vel_w[:,1]
+    roll_cut_off = torch.abs(roll) > 1.2
+    pitch_cutoff = torch.abs(pitch) > 1.2
+    result = roll_cut_off | pitch_cutoff
+    # if result:
+    #     print(roll,pitch,"++++++++")
+    return result
 
 """
 Joint terminations.
