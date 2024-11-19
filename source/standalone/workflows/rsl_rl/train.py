@@ -30,6 +30,8 @@ cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
+args_cli.task = "Isaac-Velocity-Flat-Unitree-Go1-v0"
+args_cli.num_envs = 1000
 
 # always enable cameras to record video
 if args_cli.video:

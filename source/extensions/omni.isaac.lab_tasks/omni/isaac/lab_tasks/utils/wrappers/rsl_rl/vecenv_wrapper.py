@@ -23,6 +23,17 @@ from rsl_rl.env import VecEnv
 
 from omni.isaac.lab.envs import DirectRLEnv, ManagerBasedRLEnv
 
+class MemoryTracker:
+    def __init__(self):
+        self.initial_memory = torch.cuda.memory_allocated()
+
+    def checkpoint(self):
+        current_memory = torch.cuda.memory_allocated()
+        delta_memory = current_memory - self.initial_memory
+        self.initial_memory = current_memory
+        # return delta_memory / (1024**2)
+        return current_memory
+
 
 class RslRlVecEnvWrapper(VecEnv):
     """Wraps around Isaac Lab environment for RSL-RL library
@@ -67,6 +78,7 @@ class RslRlVecEnvWrapper(VecEnv):
         self.num_envs = self.unwrapped.num_envs
         self.device = self.unwrapped.device
         self.max_episode_length = self.unwrapped.max_episode_length
+        self.tracker =MemoryTracker()
         if hasattr(self.unwrapped, "action_manager"):
             self.num_actions = self.unwrapped.action_manager.total_action_dim
         else:
@@ -174,6 +186,7 @@ class RslRlVecEnvWrapper(VecEnv):
 
     def step(self, actions: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         # record step information
+        print(f"Memory used for x: {self.tracker.checkpoint():.2f} MB","step start")
         obs_dict, rew, terminated, truncated, extras = self.env.step(actions)
         # compute dones for compatibility with RSL-RL
         dones = (terminated | truncated).to(dtype=torch.long)
@@ -186,6 +199,7 @@ class RslRlVecEnvWrapper(VecEnv):
             extras["time_outs"] = truncated
 
         # return the step information
+        print(f"Memory used for x: {self.tracker.checkpoint():.2f} MB","step end")
         return obs, rew, dones, extras
 
     def close(self):  # noqa: D102
