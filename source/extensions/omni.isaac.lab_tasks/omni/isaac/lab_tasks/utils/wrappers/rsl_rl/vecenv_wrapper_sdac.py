@@ -26,13 +26,19 @@ from omni.isaac.lab.envs import DirectRLEnv, ManagerBasedRLEnv
 class MemoryTracker:
     def __init__(self):
         self.initial_memory = torch.cuda.memory_allocated()
+        self.obs = None
+        self.rew = None
+        self.done = None
+        self.c = None
+        self.truncated = None
+        self.terminated = None
 
     def checkpoint(self):
         current_memory = torch.cuda.memory_allocated()
         delta_memory = current_memory - self.initial_memory
         self.initial_memory = current_memory
         # return delta_memory / (1024**2)
-        return current_memory
+        return current_memory / (1024**2)
 
 class SDACVecEnvWrapper(VecEnv):
     """Wraps around Isaac Lab environment for RSL-RL library
@@ -192,13 +198,17 @@ class SDACVecEnvWrapper(VecEnv):
         # record step information
         # actions = torch.clip(actions,-5,5)
         print(f"Memory used for x: {self.tracker.checkpoint():.2f} MB","step start")
-        obs_dict, rew, terminated, truncated, extras = self.env.step(self.to_foat(actions))
-        extras = None
+        obs_dict, self.rew, self.terminated, self.truncated, extras = self.env.step(self.to_foat(actions))
+        
+        # extras = None
+        # print(obs_dict.device())
         # print(f"Memory used for x: {self.tracker.checkpoint():.2f} MB")
         # compute dones for compatibility with RSL-RL
-        dones = (terminated | truncated).to(dtype=torch.long)
+        self.dones = (self.terminated | self.truncated).to(dtype=torch.long)
         # move extra observations to the extras dict
-        obs = obs_dict["policy"]
+        self.obs = obs_dict["policy"]
+        del obs_dict
+        del extras
         # extras["observations"] = obs_dict
         # move time out information to the extras dict
         # this is only needed for infinite horizon tasks
@@ -207,7 +217,7 @@ class SDACVecEnvWrapper(VecEnv):
 
         # return the step information
         print(f"Memory used for x: {self.tracker.checkpoint():.2f} MB","start end")
-        return obs, rew, dones, extras
+        return self.obs.detach(), self.rew.detach(), self.dones.detach(), None
 
     def close(self):  # noqa: D102
         return self.env.close()

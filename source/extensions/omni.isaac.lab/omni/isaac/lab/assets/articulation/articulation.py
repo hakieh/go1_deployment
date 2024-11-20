@@ -7,7 +7,7 @@
 # pyright: reportPrivateUsage=false
 
 from __future__ import annotations
-
+import gc
 import torch
 from collections.abc import Sequence
 from prettytable import PrettyTable
@@ -1227,7 +1227,7 @@ class Articulation(AssetBase):
                 joint_indices=actuator.joint_indices,
             )
             # compute joint command from the actuator model
-            control_action = actuator.compute(
+            control_action = actuator.compute(                  #占用上升
                 control_action,
                 joint_pos=self._data.joint_pos[:, actuator.joint_indices],
                 joint_vel=self._data.joint_vel[:, actuator.joint_indices],
@@ -1240,7 +1240,10 @@ class Articulation(AssetBase):
             if control_action.joint_efforts is not None:
                 self._joint_effort_target_sim[:, actuator.joint_indices] = control_action.joint_efforts
             # update state of the actuator model
-            # -- torques
+            # del control_action
+            # gc.collect()
+            # torch.cuda.empty_cache()
+            # -- torques  #在这里显存占用下降
             self._data.computed_torque[:, actuator.joint_indices] = actuator.computed_effort
             self._data.applied_torque[:, actuator.joint_indices] = actuator.applied_effort
             # -- actuator data

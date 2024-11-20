@@ -358,6 +358,7 @@ class InteractiveScene:
         # -- assets
         for articulation in self._articulations.values():
             articulation.write_data_to_sim()
+            articulation.write_data_to_sim()
         for deformable_object in self._deformable_objects.values():
             deformable_object.write_data_to_sim()
         for rigid_object in self._rigid_objects.values():

@@ -21,6 +21,16 @@ from .common import VecEnvStepReturn
 from .manager_based_env import ManagerBasedEnv
 from .manager_based_rl_env_cfg import ManagerBasedRLEnvCfg
 
+class MemoryTracker:
+    def __init__(self):
+        self.initial_memory = torch.cuda.memory_allocated()
+
+    def checkpoint(self):
+        current_memory = torch.cuda.memory_allocated()
+        delta_memory = current_memory - self.initial_memory
+        self.initial_memory = current_memory
+        # return delta_memory / (1024**2)
+        return current_memory/(1024**2)
 
 class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
     """The superclass for the manager-based workflow reinforcement learning-based environments.
@@ -79,6 +89,7 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
         # initialize data and constants
         # -- counter for curriculum
         self.common_step_counter = 0
+        self.tracker = MemoryTracker()
         # -- init buffers
         self.episode_length_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.long)
         # -- set the framerate of the gym video recorder wrapper so that the playback speed of the produced video matches the simulation
@@ -136,13 +147,14 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
     Operations - MDP
     """
 
+
     def step(self, action: torch.Tensor) -> VecEnvStepReturn:
         """Execute one time-step of the environment's dynamics and reset terminated environments.
 
         Unlike the :class:`ManagerBasedEnv.step` class, the function performs the following operations:
 
         1. Process the actions.
-        2. Perform physics stepping.
+        2. Perform physics stepping.step
         3. Perform rendering if gui is enabled.
         4. Update the environment counters and compute the rewards and terminations.
         5. Reset the environments that terminated.
@@ -156,19 +168,25 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
             A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
         """
         # process actions
+        print(f"Memory used for x: {self.tracker.checkpoint():.2f} MB","rl_step 1")
         self.action_manager.process_action(action.to(self.device))
+        print(f"Memory used for x: {self.tracker.checkpoint():.2f} MB","rl_step 1.5")
 
         # check if we need to do rendering within the physics loop
         # note: checked here once to avoid multiple checks within the loop
         is_rendering = self.sim.has_gui() or self.sim.has_rtx_sensors()
 
-        # perform physics stepping
+
         for _ in range(self.cfg.decimation):
+            print(f"Memory used for x: {self.tracker.checkpoint():.2f} MB","rl_step 1.5.", _)
             self._sim_step_counter += 1
             # set actions into buffers
             self.action_manager.apply_action()
+            print(f"Memory used for x: {self.tracker.checkpoint():.2f} MB","rl_step 1.6.", _)
             # set actions into simulator
             self.scene.write_data_to_sim()
+            torch.cuda.empty_cache()
+            print(f"Memory used for x: {self.tracker.checkpoint():.2f} MB","rl_step 1.7.", _)
             # simulate
             self.sim.step(render=False)
             # render between steps only if the GUI or an RTX sensor needs it
@@ -178,7 +196,8 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
                 self.sim.render()
             # update buffers at sim dt
             self.scene.update(dt=self.physics_dt)
-
+            # print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=100))
+        print(f"Memory used for x: {self.tracker.checkpoint():.2f} MB","rl_step 2")
         # post-step:
         # -- update env counters (used for curriculum generation)
         self.episode_length_buf += 1  # step in current episode (per env)
@@ -187,9 +206,10 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
         self.reset_buf = self.termination_manager.compute()
         self.reset_terminated = self.termination_manager.terminated
         self.reset_time_outs = self.termination_manager.time_outs
+        print(f"Memory used for x: {self.tracker.checkpoint():.2f} MB","rl_step 3")
         # -- reward computation
         self.reward_buf = self.reward_manager.compute(dt=self.step_dt)
-
+        print(f"Memory used for x: {self.tracker.checkpoint():.2f} MB","rl_step 4")
         # -- reset envs that terminated/timed-out and log the episode information
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
@@ -206,6 +226,7 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
         # -- compute observations
         # note: done after reset to get the correct observations for reset envs
         self.obs_buf = self.observation_manager.compute()
+        print(f"Memory used for x: {self.tracker.checkpoint():.2f} MB","rl_step 5")
 
         # return observations, rewards, resets and extras
         return self.obs_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, self.extras
