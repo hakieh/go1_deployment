@@ -60,3 +60,6 @@ _build
 **/events*
 **/outputs/*
 **/weight/*
+**/tf-logs/*
+**/log/*
+**/exp/*
