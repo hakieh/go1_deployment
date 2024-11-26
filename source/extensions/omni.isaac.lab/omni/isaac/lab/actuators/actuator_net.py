@@ -176,7 +176,8 @@ class ActuatorNetMLP(DCMotor):
             )
 
         # run network inference
-        torques = self.network(network_input).view(self._num_envs, self.num_joints)
+        # with torch.no_grad:
+        torques = self.network(network_input).view(self._num_envs, self.num_joints)# .detach()  #bugbugbug
         self.computed_effort = torques.view(self._num_envs, self.num_joints) * self.cfg.torque_scale
 
         # clip the computed effort based on the motor limits

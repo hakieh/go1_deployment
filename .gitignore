@@ -58,3 +58,8 @@ _build
 **/logs/*
 **/recordings/*
 **/events*
+**/outputs/*
+**/weight/*
+**/tf-logs/*
+**/log/*
+**/exp/*
