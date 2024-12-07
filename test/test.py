@@ -22,33 +22,28 @@ class Actor(nn.Module):
     def forward(self, x):
         return self.actor(x) 
 
-def euler_from_quaternion(quat_angle):
-        x = quat_angle[:,0]; y = quat_angle[:,1]; z = quat_angle[:,2]; w = quat_angle[:,3]
-        t0 = +2.0 * (w * x + y * z)
-        t1 = +1.0 - 2.0 * (x * x + y * y)
-        roll_x = torch.atan2(t0, t1)
-     
-        t2 = +2.0 * (w * y - z * x)
-        t2 = torch.clip(t2, -1, 1)
-        pitch_y = torch.asin(t2)
-     
-        t3 = +2.0 * (w * z + x * y)
-        t4 = +1.0 - 2.0 * (y * y + z * z)
-        yaw_z = torch.atan2(t3, t4)
-     
-        return roll_x, pitch_y, yaw_z
+def quat_rotate_inverse(q):
+    shape=q.shape
+    v=torch.tensor([0,0,-1],dtype=torch.float,device=mydiv).unsqueeze(0)
+    q_w = q[:, -1]
+    q_vec = q[:, :3]
+    a = v * (2.0 * q_w ** 2 - 1.0).unsqueeze(-1)
+    b = torch.cross(q_vec, v, dim=-1) * q_w.unsqueeze(-1) * 2.0
+    c = q_vec * \
+        torch.bmm(q_vec.view(shape[0], 1, 3), v.view(
+            shape[0], 3, 1)).squeeze(-1) * 2.0
+    return a - b + c
 
 ang=gem.Vector3()
 ori=gem.Quaternion()
-def do_ang(msg_ang):
+def do_imu(msg_ang):
     global ang,ori
-    ang=msg_ang.twist[2].angular
-    ori=msg_ang.pose[2].orientation
+    ang=msg_ang.angular_velocity
+    ori=msg_ang.orientation
 
 dof_map= [1, 4, 7, 10,
          2, 5, 8, 11   ,
           0, 3, 6, 9
-          
           ]
 j_pos=list()
 j_vec=list()
@@ -56,15 +51,16 @@ def do_joint(msg_joi):
     global j_pos,j_vec
     j_pos=list(msg_joi.position[dof_map[i]] for i in range(0,12))
     j_vec=list(msg_joi.velocity[dof_map[i]] for i in range(0,12))
+    #print(list(msg_joi.name[dof_map[i]] for i in range(0,12)))
 
 
 
 if __name__ == "__main__":
     
-    sub_ang=rospy.Subscriber("/gazebo/model_states",gam.ModelStates,do_ang,queue_size=1)
+    sub_imu=rospy.Subscriber("/trunk_imu",sem.Imu,do_imu,queue_size=1)
     rospy.init_node("test")
     mydiv='cuda'
-    velocity_commands=torch.tensor([0.1,0,0],device=mydiv).unsqueeze(0)
+    velocity_commands=torch.tensor([0.7,0,0],device=mydiv).unsqueeze(0)
 
     sub_joint=rospy.Subscriber("/go1_gazebo/joint_states",sem.JointState,do_joint,queue_size=1)
 
@@ -90,16 +86,18 @@ if __name__ == "__main__":
     
     rate0=rospy.Rate(1000)
     targetpos=[-1.3,0.0,0.67,-1.3,0.0,0.67,-1.3,0.0,0.67,-1.3,0.0,0.67]
+    kkp=[180,300,180,180,300,180,180,300,180,180,300,180]
+    kkd=[8,15,8,8,15,8,8,15,8,8,15,8]
     rate0.sleep()
     startpos=j_pos[:]
     duaration=1000
     leg_msg=unm.LowCmd()
     for i in range(12):
-        leg_msg.motorCmd[i].mode = 10;
-        leg_msg.motorCmd[i].Kp = 180;
-        leg_msg.motorCmd[i].Kd = 8;
+        leg_msg.motorCmd[i].mode = 10
+        leg_msg.motorCmd[i].Kp = 180
+        leg_msg.motorCmd[i].Kd = 8
     percent=float(0)
-    for i in range(5000):
+    for i in range(3000):
         percent+=float(1/duaration)
         if percent>1:
             percent=1
@@ -109,27 +107,41 @@ if __name__ == "__main__":
         rate0.sleep()
 
     rate=rospy.Rate(50)
-    actions=torch.tensor(j_pos,device=mydiv).unsqueeze(0)
+    actions=torch.tensor([0,0,0,0,0,0,0,0,0,0,0,0],device=mydiv).unsqueeze(0)
+    rqt_plus=[-1.5,0.1,0.8,-1.5,-0.1,0.8,-1.5,0.1,1,-1.5,-0.1,1]
+    model_plus=torch.tensor(list(rqt_plus[dof_map[i]] for i in range(0,12)),device=mydiv).unsqueeze(0)
+    for i in range(12):
+        leg_msg.motorCmd[i].mode = 10
+        leg_msg.motorCmd[i].Kp = 40
+        leg_msg.motorCmd[i].Kd = 0.5
+    ssss=1
     while(not rospy.is_shutdown()):
         
         base_ang_vel=torch.tensor([ang.x,ang.y,ang.z],device=mydiv).unsqueeze(0)
         quaternion=torch.tensor([ori.x,ori.y,ori.z,ori.w],device=mydiv).unsqueeze(0)
-        roll, pitch, yaw = euler_from_quaternion(quaternion) 
-        projected_gravity = torch.stack((roll, pitch, yaw), dim=1)
-        joint_pos=torch.tensor(j_pos,device=mydiv).unsqueeze(0)
+        projected_gravity = quat_rotate_inverse(quaternion)
+        joint_pos=torch.tensor(j_pos,device=mydiv).unsqueeze(0)-model_plus
         joint_vec=torch.tensor(j_vec,device=mydiv).unsqueeze(0)
         obs=torch.cat([base_ang_vel,projected_gravity,velocity_commands,joint_pos,joint_vec,actions],dim=-1)
-        
-        output=model(obs)
+        actions=model(obs)
+        output=actions[:]*0.25+model_plus
         print(output)
-        
         for i in range(12):
             leg_msg.motorCmd[i].mode=10
             leg_msg.motorCmd[i].q=output[0][i]
             leg_msg.motorCmd[i].dq=0
-            leg_msg.motorCmd[i].Kp=20
-            leg_msg.motorCmd[i].Kd=0.5
             leg_msg.motorCmd[i].tau=0
             puber[dof_map[i]].publish(leg_msg.motorCmd[i])
-        actions=output[:]
+        #actions=output[:]
         rate.sleep()
+
+'''
+FLhip->FRhip->...->thigh->calf
+dof_map= [1, 4, 7, 10,
+         2, 5, 8, 11   ,
+          0, 3, 6, 9
+          ]
+
+FLhip->FLthigh->FLcalf->...->FR
+dof_map=[1,2,0,4,5,3,7,8,6,10,11,9]
+'''
